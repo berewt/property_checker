@@ -1,0 +1,15 @@
+package property_checker
+
+brief = "Verify properties of an object values"
+readme = Readme.md
+version = 0.4.0
+
+author = Nicolas Biri <nicolas@biri.name>
+maintainer = Nicolas Biri <nicolas@biri.name>
+
+sourceloc = https://github.com/berewt/property_checker
+bugtracker = https://github.com/berewt/property_checker/issues
+
+sourcedir = src
+
+modules = PropertyChecker
