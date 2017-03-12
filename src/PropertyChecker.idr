@@ -1,5 +1,6 @@
 module PropertyChecker
 
+import Data.Fun
 import Data.HVect
 
 %default total
@@ -24,20 +25,20 @@ data Path : (input : Vect i Type)
   Nil  : Path input [] input
   (::) : Quantifier input t -> Path (t::input) output a -> Path input (t::output) a
 
-Nuf : Vect k Type -> Type -> Type
-Nuf [] t = t
-Nuf (x::xs) t = Nuf xs (x -> t)
+Path' : Type -> Vect n Type -> Type
+Path' start output = Path [start] output (reverse (start::output))
 
-apply : Nuf xs a -> HVect xs -> a
-apply x [] = x
-apply f (x :: xs) = apply f xs x
+Path_ : Vect n Type -> Type
+Path_ output = Path [Unit] output (reverse (Unit::output))
 
+private
+testStep : Path input output initial -> Fun output Bool -> HVect input -> Bool
+testStep [] x _ = x
+testStep ((Any g) :: xs) f inp = any (\params => testStep xs (f $ index 0 params) params) (map (::inp) (g inp))
+testStep ((All g) :: xs) f inp = all (\params => testStep xs (f $ index 0 params) params) (map (::inp) (g inp))
 
-test : Path input output initial -> Nuf initial Bool -> HVect input -> Bool
-test [] f x = apply f x
-test ((Any g) :: xs) f z = any (test xs f) (map (:: z) (g z))
-test ((All g) :: xs) f z = all (test xs f) (map (:: z) (g z))
+test : Path' a output -> Fun output Bool -> a -> Bool
+test p f x = testStep p f [x]
 
-test' : Path [()] output initial -> Nuf initial Bool -> Bool
-test' p f = test p f [()]
-
+test_ : Path_ output -> Fun output Bool -> Bool
+test_ p f = testStep p f [()]
