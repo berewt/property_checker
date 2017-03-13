@@ -4,6 +4,8 @@ brief = "Verify properties of an object values"
 readme = Readme.md
 version = 0.4.0
 
+pkgs = contrib
+
 author = Nicolas Biri <nicolas@biri.name>
 maintainer = Nicolas Biri <nicolas@biri.name>
 
