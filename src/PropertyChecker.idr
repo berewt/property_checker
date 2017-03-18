@@ -61,18 +61,17 @@ data AnyMarker : Type -> Type
 public export
 data Path' : (input : Vect i Type)
           -> (output : Vect j Type)
-          -> (initial : Vect k Type)
           -> Type where
-  Nil  : Path' input [] input
-  (::) : Quantifier input t -> Path' (t::input) output a -> Path' input (t::output) a
+  Nil  : Path' input []
+  (::) : Quantifier input t -> Path' (t::input) output -> Path' input (t::output)
 
 public export
 Path : Type -> Vect n Type -> Type
-Path start output = Path' [start] output (reverse (start::output))
+Path start output = Path' [start] output
 
 public export
 Path_ : Vect n Type -> Type
-Path_ output = Path' [Unit] output (reverse (Unit::output))
+Path_ output = Path' [Unit] output
 
 
 data Failure : Vect n Type -> Type where
@@ -81,7 +80,7 @@ data Failure : Vect n Type -> Type where
   AllFailure : Vect k (t, Failure xs) -> Failure (AllMarker t :: xs)
 
 public export
-pathFailure : {output : Vect n Type} -> Path' input output initial -> Vect n Type
+pathFailure : {output : Vect n Type} -> Path' input output -> Vect n Type
 pathFailure [] = []
 pathFailure (Any f :: p) {output = t :: _} = AnyMarker t :: (pathFailure p)
 pathFailure (All f :: p) {output = t :: _} = AllMarker t :: (pathFailure p)
@@ -128,7 +127,7 @@ Test_ : Type
 Test_ = Test Unit
 
 private
-testStep : (p : Path' input output initial)
+testStep : (p : Path' input output)
         -> Fun output Bool
         -> HVect input
         -> Either (Failure (pathFailure p)) Nat
