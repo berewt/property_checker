@@ -59,43 +59,51 @@ data AnyMarker : Type -> Type
 ||| The internal representation of a Path, the type is very verbose and is not
 ||| intended to be used directly.
 public export
-data Path' : (input : Vect i Type)
-          -> (output : Vect j Type)
-          -> (initial : Vect k Type)
-          -> Type where
-  Nil  : Path' input [] input
-  (::) : Quantifier input t -> Path' (t::input) output a -> Path' input (t::output) a
+data Path' : (input : Vect i Type) -> (output : Vect j Type) -> Type where
+  Nil  : Path' input []
+  (::) : Quantifier input t -> Path' (t::input) output -> Path' input (t::output)
 
+||| A type alias for path creation
 public export
 Path : Type -> Vect n Type -> Type
-Path start output = Path' [start] output (reverse (start::output))
+Path start output = Path' [start] output
 
+||| A type alias for path creation when no input type is needed
 public export
 Path_ : Vect n Type -> Type
-Path_ output = Path' [Unit] output (reverse (Unit::output))
+Path_ output = Path' [Unit] output
 
-
+||| A witness type used internally to type Test and other related types
 data Failure : Vect n Type -> Type where
   EmptyFailure : Failure []
   AnyFailure : Vect k (t, Failure xs) -> Failure (AnyMarker t :: xs)
   AllFailure : Vect k (t, Failure xs) -> Failure (AllMarker t :: xs)
 
+Show (Failure []) where
+  show _ = "[]"
+
+(Show t, Show (Failure ts)) => Show (Failure (AllMarker t::ts)) where
+  show (AllFailure xs) = "AllFailure " ++ show xs
+
+(Show t, Show (Failure ts)) => Show (Failure (AnyMarker t::ts)) where
+  show (AnyFailure xs) = "AnyFailure " ++ show xs
+
+||| Generate the Failure type for a given Path'
 public export
-pathFailure : {output : Vect n Type} -> Path' input output initial -> Vect n Type
+pathFailure : {output : Vect n Type} -> Path' input output -> Vect n Type
 pathFailure [] = []
 pathFailure (Any f :: p) {output = t :: _} = AnyMarker t :: (pathFailure p)
 pathFailure (All f :: p) {output = t :: _} = AllMarker t :: (pathFailure p)
 
-expandAll : t
-         -> Failure xs
-         -> Failure (AllMarker t :: xs)
+private
+expandAll : t -> Failure xs -> Failure (AllMarker t :: xs)
 expandAll x xs = AllFailure [(x, xs)]
 
-expandAny : t
-         -> Failure xs
-         -> Failure (AnyMarker t :: xs)
+private
+expandAny : t -> Failure xs -> Failure (AnyMarker t :: xs)
 expandAny x xs = AnyFailure [(x, xs)]
 
+private
 composeAll : Either (Failure (AllMarker ft :: fts)) Nat
           -> Either (Failure (AllMarker ft :: fts)) Nat
           -> Either (Failure (AllMarker ft :: fts)) Nat
@@ -105,6 +113,7 @@ composeAll (Left l) (Right _) = Left l
 composeAll (Right _) (Left l) = Left l
 composeAll (Right x) (Right y) = Right (x + y)
 
+private
 composeAny : Either (Failure (AnyMarker ft :: fts)) Nat
           -> Either (Failure (AnyMarker ft :: fts)) Nat
           -> Either (Failure (AnyMarker ft :: fts)) Nat
@@ -128,7 +137,7 @@ Test_ : Type
 Test_ = Test Unit
 
 private
-testStep : (p : Path' input output initial)
+testStep : (p : Path' input output)
         -> Fun output Bool
         -> HVect input
         -> Either (Failure (pathFailure p)) Nat
@@ -148,49 +157,70 @@ testStep ((All g) :: p) f previous =
                 selection
   in foldl composeAll (Right 0) rec
 
+||| Run a test for a givin input value
 test : (t : Test a) -> a ->  Either (testFailure t) Nat
 test (MkTest p f) x = testStep p f [x]
 
+||| Run a test that does not need any input
 test_ : (t : Test_) -> Either (testFailure t) Nat
 test_ t = test t ()
 
 
 namespace testGroup
 
+  ||| Build a Group of Test that may have different path
   public export
-  data TestGroup : Nat -> Type -> Type where
-      Nil  : TestGroup Z a
-      (::) : Test a -> TestGroup n a -> TestGroup (S n) a
+  data TestGroup : Type -> Type where
+      Nil  : TestGroup a
+      (::) : Test a -> TestGroup a -> TestGroup a
 
-  TestGroup_ : Nat -> Type
-  TestGroup_ n = TestGroup n ()
-
+  ||| Build a Group of Test that don't need an input and tha can have different paths
   public export
-  testGroupFailure : TestGroup n a -> Vect n Type
+  TestGroup_ : Type
+  TestGroup_ = TestGroup ()
+
+  ||| Generate the failure type for a TestGroup
+  public export
+  testGroupFailure : TestGroup a -> List Type
   testGroupFailure [] = []
   testGroupFailure (x :: xs) = testFailure x :: testGroupFailure xs
 
 namespace testResult
 
+  ||| The result of a test group : an heterogeneous list of test results
   public export
-  data TestGroupResult : Vect n Type -> Type where
+  data TestGroupResult : List Type -> Type where
     Nil  : TestGroupResult []
     (::) : Either t Nat -> TestGroupResult xs -> TestGroupResult (t :: xs)
 
-  runGroup : (tg : TestGroup n a) -> a -> TestGroupResult (testGroupFailure tg)
-  runGroup [] x = []
-  runGroup (y :: xs) x = test y x :: runGroup xs x
+||| Run a group of tests
+runGroup : (tg : TestGroup a) -> a -> TestGroupResult (testGroupFailure tg)
+runGroup [] x = []
+runGroup (y :: xs) x = test y x :: runGroup xs x
+
+||| Run a group of tests that do not need an input
+runGroup_ : (tg : TestGroup_) -> TestGroupResult (testGroupFailure tg)
+runGroup_ tg = runGroup tg ()
+
+Show (TestGroupResult []) where
+    show _ = "[]"
+
+(Show t, Show (TestGroupResult ts)) => Show (TestGroupResult (t::ts)) where
+    show (x :: xs) = show x ++ "/n" ++ show xs
+
 
 
 namespace testMapping
 
+  ||| A type for mapping test results
   public export
-  data TestMapping : Vect n Type -> Type -> Type where
+  data TestMapping : List Type -> Type -> Type where
     Nil  : TestMapping [] o
     (::) : (Either t Nat -> o)
         -> TestMapping xs o
         -> TestMapping (t :: xs) o
 
+  ||| Mapping of test results
   mapResult : TestMapping tg o -> TestGroupResult tg -> List o
   mapResult [] [] = []
   mapResult (f :: fs) (x :: xs) = f x :: mapResult fs xs
